@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "voice-coder"
+version = "0.1.0"
+description = "Hands-free voice interface for terminal-based AI coding agents (Aider)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Voice Coder Team" }]
+dependencies = [
+    "faster-whisper>=1.0.0",
+    "numpy>=1.24.0",
+    "sounddevice>=0.4.6",
+    "torch>=2.0.0",
+    "torchaudio>=2.0.0",
+    "rich>=13.7.0",
+    "textual>=0.47.0",
+    "pexpect>=4.9.0",
+    "python-dotenv>=1.0.0",
+    "pyyaml>=6.0",
+    "openwakeword>=0.6.0",
+    "onnxruntime>=1.16.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-mock>=3.12.0",
+]
+
+[project.scripts]
+voice-coder = "src.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

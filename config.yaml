@@ -1,0 +1,88 @@
+# Voice Coder configuration
+profile: default  # default | demo | quality
+
+profiles:
+  demo:
+    stt:
+      model_size: tiny
+    system:
+      wake_timeout_sec: 45
+    tts:
+      enabled: true
+  quality:
+    stt:
+      model_size: small
+    system:
+      wake_timeout_sec: 60
+
+audio:
+  sample_rate: 16000
+  channels: 1
+  chunk_duration_ms: 32  # 512 samples — matches Silero VAD window
+  device: null  # null = system default microphone
+
+vad:
+  threshold: 0.35
+  min_speech_ms: 250
+  min_silence_ms: 500
+  speech_pad_ms: 100
+
+stt:
+  model_size: base  # tiny, base, small, medium
+  device: auto  # cpu, cuda, auto
+  compute_type: int8  # int8 for CPU efficiency
+  language: en
+
+wakeword:
+  phrases:
+    - hey coder
+    - hey code
+    - assistant
+  transcript_fallback: true  # also match wake phrases in STT output
+  openwakeword_models: []  # optional; transcript wake phrases used by default
+
+router:
+  coding_keywords:
+    - create
+    - build
+    - implement
+    - fix
+    - explain
+    - refactor
+    - add
+    - update
+    - write
+    - debug
+    - optimize
+  terminal_aliases:
+    "run tests": "pytest -q"
+    "run test": "pytest -q"
+    "start server": "python -m flask run"
+    "git status": "git status"
+    "commit changes": 'git add -A && git commit -m "Voice coder: automated commit"'
+  min_confidence: 0.70
+  clarify_on_low_confidence: true
+
+agent:
+  command: aider
+  # Set OPENAI_API_KEY (or OPENROUTER_API_KEY) in .env before running — see README
+  args: ["--yes", "--no-auto-commits", "--model", "gpt-4o"]
+  startup_timeout_sec: 30
+  response_timeout_sec: 300
+  dry_run: false  # set true to test voice without Aider / API keys
+  lazy_spawn: true
+
+ui:
+  refresh_hz: 10
+  show_onboarding: true
+
+tts:
+  enabled: true
+  max_chars: 200
+
+logging:
+  level: INFO
+  file: logs/voice_coder.log
+
+system:
+  wake_timeout_sec: 30  # return to idle if no command after wake
