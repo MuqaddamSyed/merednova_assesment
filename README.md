@@ -29,7 +29,7 @@ Speak coding prompts, run tests, and control your dev workflow without touching 
 ### Event flow
 
 1. **Idle** — microphone streams audio; VAD watches for speech.
-2. **Wake** — user says *"Hey coder"* → transcript or openWakeWord triggers **ACTIVE** mode.
+2. **Wake** — user says _"Hey agent"_ → transcript or openWakeWord triggers **ACTIVE** mode.
 3. **Capture** — VAD detects speech start/end; only completed utterances are transcribed (saves CPU).
 4. **Route** — regex/keyword classifier picks: coding prompt, terminal command, navigation, or system.
 5. **Execute** — Aider PTY receives prompts; allowlisted shell commands run safely.
@@ -109,7 +109,13 @@ export OPENROUTER_API_KEY=sk-or-v1-your-key
 4. Update `config.yaml` agent args:
 
 ```yaml
-args: ["--yes", "--no-auto-commits", "--model", "openrouter/anthropic/claude-3.5-sonnet"]
+args:
+  [
+    "--yes",
+    "--no-auto-commits",
+    "--model",
+    "openrouter/anthropic/claude-3.5-sonnet",
+  ]
 ```
 
 **Option C — Test voice only (no LLM)**
@@ -150,12 +156,12 @@ python -m src.main --profile quality  # small Whisper — better accuracy
 
 ### Options
 
-| Flag | Description |
-|------|-------------|
-| `--dry-run` | Simulate Aider without spawning |
-| `--no-ui` | Headless mode (logging only) |
-| `--whisper-model small` | Override STT model |
-| `--profile demo` | Fast STT profile for live demos |
+| Flag                    | Description                     |
+| ----------------------- | ------------------------------- |
+| `--dry-run`             | Simulate Aider without spawning |
+| `--no-ui`               | Headless mode (logging only)    |
+| `--whisper-model small` | Override STT model              |
+| `--profile demo`        | Fast STT profile for live demos |
 
 ### Demo script
 
@@ -175,21 +181,21 @@ chmod +x scripts/demo.sh
 
 ### Voice commands
 
-| Category | Examples |
-|----------|----------|
-| **Wake** | "Hey coder", "Assistant" |
-| **Coding** | "Create a React login page", "Fix the authentication bug" |
-| **Terminal** | "Run tests", "Git status", "Commit changes" |
-| **Navigation** | "Open file app.py", "Search for authentication code" |
-| **System** | "Stop listening", "Mute microphone", "Exit" |
+| Category       | Examples                                                  |
+| -------------- | --------------------------------------------------------- |
+| **Wake**       | "Hey coder", "Assistant"                                  |
+| **Coding**     | "Create a React login page", "Fix the authentication bug" |
+| **Terminal**   | "Run tests", "Git status", "Commit changes"               |
+| **Navigation** | "Open file app.py", "Search for authentication code"      |
+| **System**     | "Stop listening", "Mute microphone", "Exit"               |
 
 ### Keyboard shortcuts (fallback)
 
-| Key | Action |
-|-----|--------|
+| Key | Action            |
+| --- | ----------------- |
 | `l` | Force listen mode |
-| `m` | Mute microphone |
-| `q` | Quit |
+| `m` | Mute microphone   |
+| `q` | Quit              |
 
 ### Demo UI features
 
@@ -223,26 +229,27 @@ pytest tests/ -v
 
 ### Testing strategy
 
-| Layer | Approach |
-|-------|----------|
-| Router | Unit tests with fixed phrases |
-| Wake word | Transcript matching tests |
-| Terminal | Allowlist enforcement tests |
-| STT/VAD | Manual / integration with sample WAV (future) |
-| Aider | `--dry-run` mode for CI |
-| UI | Textual pilot tests (future) |
+| Layer     | Approach                                      |
+| --------- | --------------------------------------------- |
+| Router    | Unit tests with fixed phrases                 |
+| Wake word | Transcript matching tests                     |
+| Terminal  | Allowlist enforcement tests                   |
+| STT/VAD   | Manual / integration with sample WAV (future) |
+| Aider     | `--dry-run` mode for CI                       |
+| UI        | Textual pilot tests (future)                  |
 
 ## Troubleshooting
 
-| Issue | Fix |
-|-------|-----|
-| No microphone | Check `sounddevice` default device; set `audio.device` in config |
-| Slow transcription | Use `--whisper-model tiny` or enable CUDA |
-| Aider not found | `pip install aider-chat` and ensure API keys in env |
+| Issue                         | Fix                                                                |
+| ----------------------------- | ------------------------------------------------------------------ |
+| No microphone                 | Check `sounddevice` default device; set `audio.device` in config   |
+| Slow transcription            | Use `--whisper-model tiny` or enable CUDA                          |
+| Aider not found               | `pip install aider-chat` and ensure API keys in env                |
 | OpenRouter sign-up page opens | Set `OPENAI_API_KEY` or `OPENROUTER_API_KEY` in `.env` (see above) |
-| Torch hub errors | Ensure network on first run for Silero VAD download |
+| Torch hub errors              | Ensure network on first run for Silero VAD download                |
 
 ## License
 
 MIT
+
 # merednova_assesment

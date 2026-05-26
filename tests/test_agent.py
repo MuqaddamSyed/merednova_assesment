@@ -1,5 +1,7 @@
 """Tests for Aider startup argument resolution."""
 
+from unittest.mock import Mock
+
 from src.agent.aider_client import AiderClient
 from src.config import AgentConfig
 
@@ -46,3 +48,15 @@ def test_describe_backend_uses_translated_openrouter_model(monkeypatch) -> None:
     description = client.describe_backend()
 
     assert description == "Aider via OpenRouter (openrouter/openai/gpt-4o)"
+
+
+def test_send_prompt_uses_oneshot_when_lazy_spawn_enabled(monkeypatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    client = AiderClient(AgentConfig(args=["--yes", "--model", "gpt-4o"], lazy_spawn=True))
+    mock_send_oneshot = Mock(return_value=("ok", True))
+    client._send_oneshot = mock_send_oneshot  # type: ignore[method-assign]
+
+    result = client.send_prompt("write fibonacci code")
+
+    assert result == ("ok", True)
+    mock_send_oneshot.assert_called_once_with("write fibonacci code")

@@ -299,6 +299,10 @@ class VoiceOrchestrator:
                 self._activate_listening("Wake word in speech")
                 if remainder:
                     self._dispatch(remainder)
+            elif self._should_auto_dispatch_from_idle(text):
+                logger.info("Auto-activating from idle for direct coding request: %s", text[:80])
+                self._activate_listening("Direct coding request")
+                self._dispatch(text)
             else:
                 # Store transcript so pressing L can replay it
                 self._pending_transcript = text
@@ -322,6 +326,10 @@ class VoiceOrchestrator:
 
     def _handle_segment(self, segment: "SpeechSegment") -> None:
         self._handle_segment_async(segment)
+
+    def _should_auto_dispatch_from_idle(self, text: str) -> bool:
+        routed = self._router.route(text)
+        return routed.intent == Intent.CODING and not routed.needs_clarification
 
     def _dispatch(self, text: str) -> None:
         self._metrics.begin_route()

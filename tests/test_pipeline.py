@@ -78,3 +78,9 @@ def test_low_confidence_clarification() -> None:
     r = router.route("maybe run something")
     assert r.confidence < 0.90
     assert r.needs_clarification or r.intent == Intent.CODING
+
+
+def test_direct_program_request_routes_to_coding() -> None:
+    router = CommandRouter(RouterConfig(min_confidence=0.70))
+    r = router.route("Give me a simple Fibonacci program in Python")
+    assert r.intent == Intent.CODING

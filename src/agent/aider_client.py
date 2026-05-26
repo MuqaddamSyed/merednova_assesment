@@ -133,6 +133,15 @@ class AiderClient:
             self._emit(msg)
             return msg, True
 
+        # Voice commands are single-shot requests, so use Aider's non-interactive
+        # message mode by default. The PTY path is much less reliable with Rich /
+        # prompt-toolkit terminal control sequences and can leave the UI stuck at
+        # Aider's interactive prompt instead of returning an answer.
+        if self._config.lazy_spawn:
+            if self._child and self._child.isalive():
+                self.cancel()
+            return self._send_oneshot(prompt)
+
         if not self._ensure_session():
             msg = self._last_start_error or "Aider unavailable. Set OPENAI_API_KEY in .env and restart."
             self._emit(msg)

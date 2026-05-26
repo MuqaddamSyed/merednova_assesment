@@ -37,9 +37,14 @@ _NAV_PATTERNS: list[tuple[re.Pattern[str], str, float]] = [
 
 _CODING_VERBS = re.compile(
     r"\b(create|build|implement|fix|explain|refactor|add|update|write|debug|optimize|"
-    r"generate|modify|change|remove|delete|improve|patch)\b",
+    r"generate|modify|change|remove|delete|improve|patch|show|give)\b",
     re.I,
 )
+
+_CODING_REQUEST_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(r"\b(give|show) me\b.*\b(code|program|script|function|class|example)\b", re.I),
+    re.compile(r"\b(simple|example)\b.*\b(code|program|script)\b", re.I),
+]
 
 
 @dataclass
@@ -247,4 +252,6 @@ class CommandRouter:
 
     def _looks_like_coding(self, text: str) -> bool:
         lower = text.lower()
-        return any(kw in lower for kw in self._coding_keywords)
+        return any(kw in lower for kw in self._coding_keywords) or any(
+            pattern.search(text) for pattern in _CODING_REQUEST_PATTERNS
+        )

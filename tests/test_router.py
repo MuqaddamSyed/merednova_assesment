@@ -42,6 +42,12 @@ def test_coding_explain_error(router: CommandRouter) -> None:
     assert r.intent == Intent.CODING
 
 
+def test_coding_give_me_program(router: CommandRouter) -> None:
+    r = router.route("Give me a simple Fibonacci program in Python")
+    assert r.intent == Intent.CODING
+    assert r.confidence >= 0.85
+
+
 def test_navigation_open_file(router: CommandRouter) -> None:
     r = router.route("open file app.py")
     assert r.intent == Intent.NAVIGATION
