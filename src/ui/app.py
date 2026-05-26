@@ -152,11 +152,11 @@ class VoiceCoderApp(App):
     /* Config Panel Styling */
     #config-form { padding: 1 2; }
     .section-header { margin-top: 1; margin-bottom: 1; }
-    .config-row { height: 3; align: middle; margin-bottom: 1; }
-    .config-row-checkbox { height: 2; align: middle; margin-bottom: 1; }
-    .form-label { width: 30; font-weight: bold; }
+    .config-row { height: 3; align: left middle; margin-bottom: 1; }
+    .config-row-checkbox { height: 2; align: left middle; margin-bottom: 1; }
+    .form-label { width: 30; text-style: bold; }
     #cfg-stt-provider, #cfg-stt-model, #cfg-wake-phrases, #cfg-api-key { width: 1fr; }
-    .config-actions { margin-top: 2; align: right; }
+    .config-actions { margin-top: 2; align: right middle; }
     """
 
     BINDINGS = [
@@ -197,9 +197,10 @@ class VoiceCoderApp(App):
                     with Vertical(id="left"):
                         yield OnboardingPanel(id="onboarding")
                         yield HistoryPanel(id="history")
+                        wake_phrase = self._orchestrator._config.wakeword.phrases[0] if self._orchestrator._config.wakeword.phrases else "Hey coder"
                         yield Static(
                             "[bold]Voice commands[/]\n"
-                            "• Hey coder\n"
+                            f"• {wake_phrase.title()}\n"
                             "• Run tests / Commit changes\n"
                             "• Run terminal: 'run git log -n 5'\n"
                             "• Explain the failing test\n"
@@ -310,9 +311,9 @@ class VoiceCoderApp(App):
         cfg.stt.provider = str(provider)
         cfg.stt.model_size = str(model_size)
         cfg.wakeword.phrases = [p.strip() for p in wake_str.split(",") if p.strip()]
-        cfg.router.llm_fallback = bool(llm_fallback)
-        cfg.tts.enabled = bool(tts_enabled)
-        self._orchestrator._speaker._enabled = bool(tts_enabled)
+        cfg.router.llm_fallback = llm_fallback
+        cfg.tts.enabled = tts_enabled
+        self._orchestrator._speaker._enabled = tts_enabled
 
         if api_key and api_key != "********":
             os.environ["OPENAI_API_KEY"] = api_key
@@ -320,11 +321,11 @@ class VoiceCoderApp(App):
 
         try:
             save_config(cfg)
-            self._orchestrator._wakeword.phrases = cfg.wakeword.phrases
+            self._orchestrator._wakeword.update_phrases(cfg.wakeword.phrases)
             self._orchestrator._router._config = cfg.router
             self._orchestrator._router._min_confidence = cfg.router.min_confidence
             self._orchestrator._router._coding_keywords = set(k.lower() for k in cfg.router.coding_keywords)
-            self._orchestrator._transcriber._config = cfg.stt
+            self._orchestrator._stt._config = cfg.stt
 
             self.query_one("#summary", SummaryPanel).set_summary("Settings successfully saved and loaded!")
             self.notify("Settings saved successfully!")
@@ -351,8 +352,9 @@ class VoiceCoderApp(App):
             f.writelines(lines)
 
     def on_mount(self) -> None:
+        wake_phrase = self._orchestrator._config.wakeword.phrases[0] if self._orchestrator._config.wakeword.phrases else "Hey coder"
         self.query_one("#status", StatusBar).update_status(
-            "idle", "Press [bold]L[/] to listen, or say 'Hey coder'"
+            "idle", f"Press [bold]L[/] to listen, or say '{wake_phrase}'"
         )
         self.query_one("#transcript", TranscriptPanel).set_transcript("(waiting for speech)")
         self.query_one("#summary", SummaryPanel).set_summary("Ready.")
@@ -431,7 +433,7 @@ class VoiceCoderApp(App):
             elif kind == EventKind.PRELOAD:
                 summary.set_summary(event.message)
 
-    def action_quit(self) -> None:
+    async def action_quit(self) -> None:
         self._orchestrator._shutdown.request_shutdown()
         self.exit()
 

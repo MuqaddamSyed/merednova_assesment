@@ -19,7 +19,11 @@ def main() -> int:
             print(f"  FAIL {mod} — pip install -r requirements.txt")
             ok = False
 
-    if shutil.which("aider"):
+    import os
+    import sys
+    venv_bin = os.path.dirname(sys.executable)
+    search_path = venv_bin + os.pathsep + os.environ.get("PATH", "")
+    if shutil.which("aider", path=search_path):
         print("  OK  aider (on PATH)")
     else:
         print("  WARN aider not found — pip install aider-chat (or use --dry-run)")
@@ -31,8 +35,8 @@ def main() -> int:
         print(sd.query_devices())
         print("\nDefault input:", sd.query_devices(kind="input"))
     except Exception as exc:
-        print(f"  FAIL audio: {exc}")
-        ok = False
+        print(f"  WARN audio: {exc}")
+        print("       Connect a microphone or set audio.device in config.yaml before live use.")
 
     try:
         from src.config import load_config

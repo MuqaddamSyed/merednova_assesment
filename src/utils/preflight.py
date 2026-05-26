@@ -24,11 +24,15 @@ def run_preflight(config: AppConfig) -> list[PreflightCheck]:
         import sounddevice as sd
 
         device = sd.query_devices(kind="input")
+        if isinstance(device, dict):
+            device_name = str(device.get("name", "unknown"))
+        else:
+            device_name = str(device)
         checks.append(
             PreflightCheck(
                 "Microphone",
                 True,
-                f"Default input: {device.get('name', 'unknown')}",
+                f"Default input: {device_name}",
             )
         )
     except Exception as exc:
@@ -49,9 +53,12 @@ def run_preflight(config: AppConfig) -> list[PreflightCheck]:
         checks.append(PreflightCheck("Whisper STT", False, str(exc)))
 
     # Aider + API key
+    import sys
+    venv_bin = os.path.dirname(sys.executable)
+    search_path = venv_bin + os.pathsep + os.environ.get("PATH", "")
     if config.agent.dry_run:
         checks.append(PreflightCheck("Aider", True, "Dry-run mode (no API key needed)"))
-    elif not shutil.which(config.agent.command):
+    elif not shutil.which(config.agent.command, path=search_path):
         checks.append(
             PreflightCheck(
                 "Aider",
@@ -83,7 +90,7 @@ def run_preflight(config: AppConfig) -> list[PreflightCheck]:
         PreflightCheck(
             "Ready",
             True,
-            "Press L to listen, or say 'Hey coder'",
+            f"Press L to listen, or say '{config.wakeword.phrases[0] if config.wakeword.phrases else 'Hey coder'}'",
         )
     )
     return checks

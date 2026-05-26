@@ -3,6 +3,7 @@
 VENV := .venv
 PY := $(VENV)/bin/python
 PIP := $(VENV)/bin/pip
+PYCACHE_DIR := .pycache
 
 setup: $(VENV)/bin/activate
 	$(PIP) install -U pip
@@ -21,7 +22,7 @@ test-fast:
 	PYTHONPATH=. $(PY) -m pytest tests/test_router.py tests/test_context.py tests/test_terminal.py tests/test_metrics.py tests/test_pipeline.py -v
 
 lint:
-	$(PY) -m compileall -q src tests
+	PYTHONPYCACHEPREFIX=$(PYCACHE_DIR) $(PY) -m compileall -q src tests
 
 check: lint test-fast
 	PYTHONPATH=. $(PY) scripts/check_setup.py

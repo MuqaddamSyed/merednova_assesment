@@ -14,6 +14,8 @@ from src.config import AgentConfig
 
 logger = logging.getLogger("voice_coder.agent")
 
+_OPENAI_MODEL_PREFIXES = ("gpt-", "o1", "o3", "o4")
+
 _AUTH_ERROR_PATTERNS = [
     re.compile(r"openrouter", re.I),
     re.compile(r"api key", re.I),
@@ -45,6 +47,7 @@ class AiderClient:
         self._dry_run = config.dry_run
         self._cancelled = threading.Event()
         self._env = self._build_env()
+        self._last_start_error = ""
 
     @property
     def is_running(self) -> bool:
@@ -52,6 +55,9 @@ class AiderClient:
 
     def _build_env(self) -> dict[str, str]:
         env = os.environ.copy()
+        import sys
+        venv_bin = os.path.dirname(sys.executable)
+        env["PATH"] = venv_bin + os.pathsep + env.get("PATH", "")
         for key in ("OPENAI_API_KEY", "OPENROUTER_API_KEY", "ANTHROPIC_API_KEY"):
             if os.environ.get(key):
                 env[key] = os.environ[key]
@@ -72,15 +78,20 @@ class AiderClient:
         if self._started and (self._dry_run or self.is_running or self._child is None):
             if self._dry_run:
                 return True
-        if not shutil.which(self._config.command):
+        args = self._effective_args()
+        if args is None:
+            return False
+        cmd_path = shutil.which(self._config.command, path=self._env.get("PATH"))
+        if not cmd_path:
             logger.error("Aider not found on PATH. Install: pip install aider-chat")
+            self._last_start_error = "Aider not installed. Run: pip install aider-chat"
             return False
         if self.is_running:
             return True
         try:
             import pexpect
 
-            args = [self._config.command, *self._config.args]
+            args = [cmd_path, *args]
             self._child = pexpect.spawn(
                 args[0],
                 args=args[1:],
@@ -123,7 +134,7 @@ class AiderClient:
             return msg, True
 
         if not self._ensure_session():
-            msg = "Aider unavailable. Set OPENAI_API_KEY in .env and restart."
+            msg = self._last_start_error or "Aider unavailable. Set OPENAI_API_KEY in .env and restart."
             self._emit(msg)
             return msg, False
 
@@ -142,7 +153,12 @@ class AiderClient:
                 [pexpect.TIMEOUT, pexpect.EOF, "> "],
                 timeout=self._config.response_timeout_sec,
             )
-            chunk = (self._child.before or "") + (self._child.after or "")
+            before = self._child.before or ""
+            after = self._child.after
+            # pexpect sets .after to the sentinel class (not a string) for TIMEOUT/EOF
+            if not isinstance(after, str):
+                after = ""
+            chunk = before + after
             self._emit(chunk)
             if self._detect_auth_error(chunk):
                 return chunk, False
@@ -152,7 +168,11 @@ class AiderClient:
             return str(exc), False
 
     def _send_oneshot(self, prompt: str) -> tuple[str, bool]:
-        cmd = [self._config.command, *self._config.args, "--message", prompt]
+        cmd_path = shutil.which(self._config.command, path=self._env.get("PATH")) or self._config.command
+        args = self._effective_args()
+        if args is None:
+            return self._last_start_error, False
+        cmd = [cmd_path, *args, "--message", prompt]
         logger.info("Aider one-shot: %s", prompt[:80])
         try:
             proc = subprocess.Popen(
@@ -189,20 +209,120 @@ class AiderClient:
                 return True
         return False
 
+    def describe_backend(self) -> str:
+        args = self._effective_args()
+        if args is None:
+            return self._last_start_error or "Aider unavailable"
+
+        model = self._extract_model(args) or "default"
+        provider = self._provider_for_model(model)
+        return f"Aider via {provider} ({model})"
+
+    def _effective_args(self) -> list[str] | None:
+        args = list(self._config.args)
+        if "--no-browser" not in args:
+            args.append("--no-browser")
+
+        model = self._extract_model(args)
+        openai_key = bool(self._env.get("OPENAI_API_KEY"))
+        openrouter_key = bool(self._env.get("OPENROUTER_API_KEY"))
+        anthropic_key = bool(self._env.get("ANTHROPIC_API_KEY"))
+
+        if not any((openai_key, openrouter_key, anthropic_key)):
+            self._last_start_error = (
+                "Aider needs an API key. Set OPENAI_API_KEY or OPENROUTER_API_KEY and restart."
+            )
+            return None
+
+        if model and self._is_openai_model(model) and not openai_key:
+            if openrouter_key:
+                translated = f"openrouter/openai/{model}"
+                logger.info("Switching Aider model from %s to %s based on OPENROUTER_API_KEY", model, translated)
+                self._set_model(args, translated)
+            else:
+                self._last_start_error = (
+                    f"Aider is configured for model '{model}', but OPENAI_API_KEY is not set."
+                )
+                return None
+
+        if model and model.startswith("openrouter/") and not openrouter_key:
+            if openai_key:
+                translated = self._strip_openrouter_prefix(model)
+                logger.info("Switching Aider model from %s to %s based on OPENAI_API_KEY", model, translated)
+                self._set_model(args, translated)
+            else:
+                self._last_start_error = (
+                    f"Aider is configured for model '{model}', but OPENROUTER_API_KEY is not set."
+                )
+                return None
+
+        if model and model.startswith("claude") and not (anthropic_key or openrouter_key):
+            self._last_start_error = (
+                f"Aider is configured for model '{model}', but no compatible API key is set."
+            )
+            return None
+
+        self._last_start_error = ""
+        return args
+
+    @staticmethod
+    def _extract_model(args: list[str]) -> str | None:
+        if "--model" in args:
+            idx = args.index("--model")
+            if idx + 1 < len(args):
+                return args[idx + 1]
+        return None
+
+    @staticmethod
+    def _set_model(args: list[str], model: str) -> None:
+        if "--model" in args:
+            idx = args.index("--model")
+            if idx + 1 < len(args):
+                args[idx + 1] = model
+                return
+        args.extend(["--model", model])
+
+    @staticmethod
+    def _is_openai_model(model: str) -> bool:
+        return model.startswith(_OPENAI_MODEL_PREFIXES)
+
+    @staticmethod
+    def _strip_openrouter_prefix(model: str) -> str:
+        parts = model.split("/", 2)
+        if len(parts) == 3 and parts[0] == "openrouter":
+            return parts[2]
+        return model
+
+    @staticmethod
+    def _provider_for_model(model: str) -> str:
+        if model.startswith("openrouter/"):
+            return "OpenRouter"
+        if model.startswith("claude"):
+            return "Anthropic"
+        if AiderClient._is_openai_model(model):
+            return "OpenAI"
+        return "configured backend"
+
     def _auth_help_message(self) -> str:
         return (
             "Aider needs an API key. Set OPENAI_API_KEY in .env to avoid OpenRouter browser redirect."
         )
 
     def _emit(self, text: str) -> None:
+        text = self._strip_ansi(text)
         if self._on_output:
             self._on_output(text)
         for line in text.splitlines():
             self._emit_line(line)
 
     def _emit_line(self, line: str) -> None:
+        line = self._strip_ansi(line)
         if self._on_line and line.strip():
             self._on_line(line)
+
+    @staticmethod
+    def _strip_ansi(text: str) -> str:
+        return re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', "", text)
 
     def stop(self) -> None:
         if self._child:

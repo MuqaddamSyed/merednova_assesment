@@ -33,6 +33,12 @@ class WakeWordDetector:
         else:
             logger.info("Using transcript-based wake word detection")
 
+    def update_phrases(self, phrases: list[str]) -> None:
+        self._phrases = [p.lower().strip() for p in phrases]
+        self._patterns = [
+            re.compile(r"\b" + re.escape(p) + r"\b", re.IGNORECASE) for p in self._phrases
+        ]
+
     def _init_openwakeword(self) -> None:
         try:
             from openwakeword.model import Model
@@ -58,10 +64,12 @@ class WakeWordDetector:
         return False
 
     def strip_wake_phrase(self, text: str) -> str:
-        """Remove wake phrase from transcript, returning remainder as command."""
+        """Remove the primary wake phrase from transcript, returning remainder as command."""
         result = text
-        for phrase in self._phrases:
-            result = re.sub(re.escape(phrase), "", result, flags=re.IGNORECASE)
+        for phrase, pattern in zip(self._phrases, self._patterns):
+            if pattern.search(result):
+                result = pattern.sub("", result, count=1)
+                break
         return result.strip(" ,.!")
 
     def check_audio(self, audio: np.ndarray) -> bool:

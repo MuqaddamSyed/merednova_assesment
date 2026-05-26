@@ -67,6 +67,8 @@ class VoiceOrchestrator:
         self._shutdown = shutdown
         self._events = event_queue or queue.Queue()
         self.state = OrchestratorState()
+        wake_phrase = config.wakeword.phrases[0] if config.wakeword.phrases else "Hey coder"
+        self.state.last_status = f"Say '{wake_phrase}' to activate"
         self.context = SessionContext()
 
         self._audio = AudioCapture(config.audio, on_chunk=self._on_audio_chunk)
@@ -87,6 +89,8 @@ class VoiceOrchestrator:
             on_line=lambda line: self._push(UIEvent(EventKind.AGENT, detail=line)),
         )
         self._confirming_command = None
+        self._pending_transcript: str | None = None
+        self._pending_transcript_time: float = 0.0
 
         self._chunk_queue: queue.Queue[np.ndarray] = queue.Queue(maxsize=200)
         self._worker: threading.Thread | None = None
@@ -118,7 +122,7 @@ class VoiceOrchestrator:
     def _on_audio_chunk(self, chunk: np.ndarray) -> None:
         if self._shutdown.requested:
             return
-        level = float(min(1.0, np.abs(chunk).mean() * 12))
+        level = min(1.0, float(np.abs(chunk).mean() * 12))
         self.state.audio_level = level
         self._push(UIEvent.audio_level(level))
         try:
@@ -145,7 +149,8 @@ class VoiceOrchestrator:
         self._worker.start()
         self._shutdown.register(self.stop)
         threading.Thread(target=self._preload_whisper, daemon=True, name="whisper-preload").start()
-        self._push(UIEvent.status("Voice Coder ready. Press L or say 'Hey coder'."))
+        wake_phrase = self._config.wakeword.phrases[0] if self._config.wakeword.phrases else "Hey coder"
+        self._push(UIEvent.status(f"Voice Coder ready. Press L or say '{wake_phrase}'."))
         logger.info("Orchestrator started")
 
     def _preload_whisper(self) -> None:
@@ -212,6 +217,14 @@ class VoiceOrchestrator:
         self._last_active = time.monotonic()
         self._push(UIEvent(EventKind.MODE, message="listening", detail=reason))
         self._announce("Listening.", speak=False)
+
+        # If user pressed L and there's a recent transcript that was ignored, dispatch it now
+        if self._pending_transcript and (time.monotonic() - self._pending_transcript_time) < 10.0:
+            text = self._pending_transcript
+            self._pending_transcript = None
+            logger.info("Dispatching pending transcript: %s", text[:80])
+            self._push(UIEvent(EventKind.TRANSCRIPT, message=text))
+            self._dispatch(text)
 
     def _handle_segment_async(self, segment: "SpeechSegment") -> None:
         self.state.mode = AppMode.PROCESSING
@@ -286,6 +299,16 @@ class VoiceOrchestrator:
                 self._activate_listening("Wake word in speech")
                 if remainder:
                     self._dispatch(remainder)
+            else:
+                # Store transcript so pressing L can replay it
+                self._pending_transcript = text
+                self._pending_transcript_time = time.monotonic()
+                logger.info("Speech in IDLE mode (no wake word): '%s' — press L or say wake word", text[:80])
+                self.state.mode = AppMode.IDLE
+                wake_phrase = self._config.wakeword.phrases[0] if self._config.wakeword.phrases else "Hey coder"
+                self.state.last_status = f"Say '{wake_phrase}' or press L to activate"
+                self._push(UIEvent(EventKind.MODE, message="idle", detail="Wake word not found"))
+                self._push(UIEvent.status(self.state.last_status))
             return
 
         if self._wakeword.check_transcript(text):
@@ -343,16 +366,17 @@ class VoiceOrchestrator:
         if routed.intent == Intent.TERMINAL:
             self._run_terminal(routed)
             self.state.mode = AppMode.LISTENING
+            self._push(UIEvent(EventKind.MODE, message="listening", detail="Command done"))
             return
 
         if routed.intent == Intent.NAVIGATION:
             self._run_navigation(routed)
             self.state.mode = AppMode.LISTENING
+            self._push(UIEvent(EventKind.MODE, message="listening", detail="Navigation done"))
             return
 
         if routed.intent == Intent.CODING:
             self._run_coding(routed)
-            self.state.mode = AppMode.LISTENING
             return
 
         self._announce("Could not understand command.")
@@ -367,6 +391,8 @@ class VoiceOrchestrator:
         summary = f"Running: {cmd_label}"
         self._announce(summary, speak=False)
         self._push(UIEvent.status(summary))
+        self.state.mode = AppMode.EXECUTING
+        self._push(UIEvent(EventKind.MODE, message="executing", detail=summary))
 
         if confirmed or routed.action != "custom_command":
             if routed.action == "custom_command":
@@ -387,6 +413,8 @@ class VoiceOrchestrator:
         self._announce(done)
 
     def _run_navigation(self, routed: RoutedCommand) -> None:
+        self.state.mode = AppMode.EXECUTING
+        self._push(UIEvent(EventKind.MODE, message="executing", detail=f"Navigating: {routed.action}"))
         if routed.action == "open_file":
             result = self._terminal.open_file_hint(routed.payload)
         else:
@@ -396,15 +424,21 @@ class VoiceOrchestrator:
 
     def _run_coding(self, routed: RoutedCommand) -> None:
         prompt = self.context.enrich_coding_prompt(routed.payload)
+        backend = self._agent.describe_backend()
         summary = f"Routed to Aider: {routed.payload[:80]}"
         self._announce(summary, speak=False)
         self.state.agent_busy = True
+        self.state.mode = AppMode.EXECUTING
+        self._push(UIEvent(EventKind.MODE, message="executing", detail="Aider working"))
         self._push(UIEvent.spinner(True, "Aider thinking..."))
-        self._push(UIEvent.status("Aider working..."))
+        self._push(UIEvent.status(f"{backend}..."))
+        self._push(UIEvent.summary(f"{summary} [{backend}]"))
 
         def _work() -> None:
             output, success = self._agent.send_prompt(prompt)
             self.state.agent_busy = False
+            self.state.mode = AppMode.LISTENING
+            self._push(UIEvent(EventKind.MODE, message="listening", detail="Aider finished"))
             self._push(UIEvent.spinner(False))
             self.context.record_aider(output)
             status = "Aider finished" if success else "Aider error"

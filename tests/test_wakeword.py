@@ -11,8 +11,10 @@ def test_wake_phrase_detected() -> None:
 
 
 def test_wake_strip() -> None:
-    det = WakeWordDetector(WakewordConfig(phrases=["hey coder"]))
-    assert det.strip_wake_phrase("Hey coder create a REST API") == "create a REST API"
+    det = WakeWordDetector(WakewordConfig(phrases=["hey agent", "agent"]))
+    assert det.strip_wake_phrase("Hey agent create a REST API") == "create a REST API"
+    assert det.strip_wake_phrase("Hey agent create an agent") == "create an agent"
+    assert det.strip_wake_phrase("Agent create an agent") == "create an agent"
 
 
 def test_no_false_positive() -> None:

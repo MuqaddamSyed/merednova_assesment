@@ -3,6 +3,22 @@
 
 from __future__ import annotations
 
+import os
+# Disable Hugging Face progress bars to avoid multiprocessing issues
+os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
+
+# Monkeypatch tqdm default write lock to avoid multiprocessing RLock bug on macOS (Python 3.9)
+try:
+    import tqdm.std as tqdm_std
+
+    default_write_lock = getattr(tqdm_std, "TqdmDefaultWriteLock", None)
+    if default_write_lock is not None:
+        default_write_lock.create_mp_lock = classmethod(
+            lambda cls: setattr(cls, "mp_lock", None)
+        )
+except Exception:
+    pass
+
 import argparse
 import queue
 import sys

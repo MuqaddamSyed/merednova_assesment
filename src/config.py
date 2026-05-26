@@ -54,7 +54,7 @@ class RouterConfig:
 @dataclass
 class AgentConfig:
     command: str = "aider"
-    args: list[str] = field(default_factory=lambda: ["--yes", "--no-auto-commits"])
+    args: list[str] = field(default_factory=lambda: ["--yes", "--no-auto-commits", "--no-browser"])
     startup_timeout_sec: int = 30
     response_timeout_sec: int = 300
     dry_run: bool = False
