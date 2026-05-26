@@ -1,4 +1,4 @@
-# Voice Coder
+# Voice Coder by Syed Muqaddam Abbas
 
 **Hands-free voice interface for terminal-based AI coding agents (Aider).**
 
@@ -16,7 +16,7 @@ Speak coding prompts, run tests, and control your dev workflow without touching 
        │                │                  │         ▼        ▼        ▼
        │                │                  │    ┌────────┐ ┌────┐ ┌────────┐
        │                │                  │    │ Aider  │ │Term│ │ System │
-       │                │                  │    │ (PTY)  │ │cmd │ │ cmds   │
+       │                │                  │    │ 1-shot │ │cmd │ │ cmds   │
        └────────────────┴──────────────────┴────┴────────┴ └────┴ └────────┘
                                         │
                                         ▼
@@ -29,10 +29,10 @@ Speak coding prompts, run tests, and control your dev workflow without touching 
 ### Event flow
 
 1. **Idle** — microphone streams audio; VAD watches for speech.
-2. **Wake** — user says _"Hey agent"_ → transcript or openWakeWord triggers **ACTIVE** mode.
+2. **Wake** — user says _"Hey agent"_ or speaks a clear coding request → transcript or openWakeWord triggers **ACTIVE** mode.
 3. **Capture** — VAD detects speech start/end; only completed utterances are transcribed (saves CPU).
 4. **Route** — regex/keyword classifier picks: coding prompt, terminal command, navigation, or system.
-5. **Execute** — Aider PTY receives prompts; allowlisted shell commands run safely.
+5. **Execute** — Aider receives one-shot coding prompts; allowlisted shell commands run safely.
 6. **Display** — Textual UI shows transcript, mode, agent output, and status.
 
 ## Project structure
@@ -82,7 +82,7 @@ pip install aider-chat   # coding agent CLI
 
 ### Aider API keys (fixes OpenRouter browser redirect)
 
-When Voice Coder starts Aider without an API key, Aider opens **[OpenRouter sign-up](https://openrouter.ai/sign-up)** in your browser (`localhost:8484` OAuth). That is **Aider asking for an LLM**, not Voice Coder itself.
+When Voice Coder starts Aider without a usable API key, Aider may open **[OpenRouter sign-up](https://openrouter.ai/sign-up)** in your browser (`localhost:8484` OAuth). That is **Aider asking for an LLM**, not Voice Coder itself.
 
 **Pick one approach:**
 
@@ -95,6 +95,8 @@ export $(grep -v '^#' .env | xargs)   # or: source .env if you add export lines
 ```
 
 `config.yaml` already uses `--model gpt-4o`. Restart Voice Coder.
+
+If you see `litellm.AuthenticationError` in the right-side panel, Voice Coder has already reached OpenAI successfully but the key itself is invalid, expired, malformed, or not loaded into the app process. Re-export `OPENAI_API_KEY`, verify it starts with `sk-`, and restart the app.
 
 **Option B — OpenRouter API key (no browser OAuth)**
 
@@ -172,7 +174,7 @@ chmod +x scripts/demo.sh
 
 ### Suggested demo script
 
-1. **"Hey coder"** — activates listening
+1. **"Hey agent"** — activates listening
 2. **"Create a Python REST API"** — sent to Aider
 3. **"Run tests"** — executes `pytest -q`
 4. **"Explain the failing test"** — coding prompt to Aider
@@ -183,7 +185,7 @@ chmod +x scripts/demo.sh
 
 | Category       | Examples                                                  |
 | -------------- | --------------------------------------------------------- |
-| **Wake**       | "Hey coder", "Assistant"                                  |
+| **Wake**       | "Hey agent", "Agent", "Assistant"                         |
 | **Coding**     | "Create a React login page", "Fix the authentication bug" |
 | **Terminal**   | "Run tests", "Git status", "Commit changes"               |
 | **Navigation** | "Open file app.py", "Search for authentication code"      |
@@ -209,6 +211,8 @@ chmod +x scripts/demo.sh
 - **TTS** — macOS `say` reads short status messages (disable in `config.yaml`)
 
 Voice commands added: **"cancel agent"**, **"commit with message …"**
+
+Direct prompts such as **"Give me a simple Fibonacci program in Python"** now auto-route to Aider even if you do not say the wake phrase first.
 
 ## Configuration
 
@@ -245,7 +249,8 @@ pytest tests/ -v
 | No microphone                 | Check `sounddevice` default device; set `audio.device` in config   |
 | Slow transcription            | Use `--whisper-model tiny` or enable CUDA                          |
 | Aider not found               | `pip install aider-chat` and ensure API keys in env                |
-| OpenRouter sign-up page opens | Set `OPENAI_API_KEY` or `OPENROUTER_API_KEY` in `.env` (see above) |
+| OpenRouter sign-up page opens | Set `OPENAI_API_KEY` or `OPENROUTER_API_KEY` in `.env`, then restart |
+| `litellm.AuthenticationError` | Your OpenAI key is invalid, expired, malformed, or not loaded        |
 | Torch hub errors              | Ensure network on first run for Silero VAD download                |
 
 ## License
